@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Letter Generator</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins&display=swap" rel="stylesheet">
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body,
+        html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            font-family: 'Poppins', sans-serif;
+            font-size: 12px;
+        }
+
+        .letter-container {
+            display: grid;
+            grid-template-columns: 50% 50%;
+            height: 100vh;
+        }
+
+        .letterForm-wrapper {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100%;
+        }
+
+        .letterForm {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 12px;
+            width: 500px;
+            height: 70vh;
+            padding: 20px;
+            overflow-y: auto;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            background: #f9f9f9;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .form-group.full {
+            grid-column: span 4;
+        }
+
+        .form-group.three-quarter {
+            grid-column: span 3;
+        }
+
+        .form-group.quarter {
+            grid-column: span 1;
+        }
+
+        .form-group.half {
+            grid-column: span 2;
+        }
+
+        input,
+        select,
+        textarea {
+            font-size: 12px;
+            padding: 6px 8px;
+            border: 1px solid #aaa;
+            border-radius: 4px;
+            font-family: 'Poppins', sans-serif;
+        }
+
+        .letterPreview {
+            width: 700px;
+            height: 100%;
+            padding: 30px;
+            overflow-y: auto;
+            border-left: 1px solid #ccc;
+            background: #fff;
+
+            display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    flex-direction: column;
+        }
+
+        .signature-img {
+            max-width: 200px;
+            margin-top: 10px;
+        }
+
+        .letterPreview p {
+            margin: 5px 0;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="letter-container">
+        <!-- Left: Form -->
+        <div class="letterForm-wrapper">
+            <form id="letterForm" class="letterForm">
+                <div class="form-group full">
+                    <label for="name">Recipient Full Name:</label>
+                    <input type="text" id="name" placeholder="e.g. John Doe" />
+                </div>
+
+                <div class="form-group quarter">
+                    <label for="date">Date:</label>
+                    <input type="date" id="date" />
+                </div>
+                <div class="form-group three-quarter">
+                    <label for="location">House Location:</label>
+                    <input type="text" id="location" />
+                </div>
+
+                <div class="form-group half">
+                    <label for="city">City:</label>
+                    <input type="text" id="city" placeholder="e.g. Osu" />
+                </div>
+                <div class="form-group half">
+                    <label for="region">Region:</label>
+                    <input type="text" id="region" placeholder="e.g. Accra" />
+                </div>
+
+                <div class="form-group full">
+                    <label for="subject">Subject:</label>
+                    <input type="text" id="subject" />
+                </div>
+
+                <div class="form-group full">
+                    <label for="body">Body:</label>
+                    <textarea id="body" rows="5"></textarea>
+                </div>
+
+                <div class="form-group half">
+                    <label for="valediction">Valediction:</label>
+                    <select id="valediction">
+                        <option value="">--None--</option>
+                        <option>Sincerely,</option>
+                        <option>With kind regards,</option>
+                        <option>With best regards,</option>
+                        <option>Respectfully,</option>
+                        <option>Cordially,</option>
+                        <option>Yours truly,</option>
+                    </select>
+                </div>
+
+                <div class="form-group half">
+                    <label for="signatureUpload">Upload Signature:</label>
+                    <input type="file" id="signatureUpload" accept="image/*" />
+                </div>
+
+                <div class="form-group half">
+                    <label for="signatureName">Your Name (signature):</label>
+                    <input type="text" id="signatureName" placeholder="Mohammed Sumaila, Ph.D." />
+                </div>
+                <div class="form-group half">
+                    <label for="position">Position:</label>
+                    <input type="text" id="position" placeholder="Chief Executive Officer" />
+                </div>
+            </form>
+
+            <!-- Button to Trigger Preview -->
+            <div class="button">
+                <div style="text-align:center; margin-top: 10px;">
+                    <button onclick="generatePreview()">View Letter</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right: Preview -->
+        <div class="letterPreview" id="letterPreview">
+            <canvas id="a4Canvas" width="2480" height="3508"
+  style="width: 450px; height: auto; display: block; margin: 20px auto; border: 1px solid #ccc;">
+</canvas>
+
+
+        </div>
+    </div>
+    </div> <!-- closing .letter-container -->
+
+
+
+    <script>
+        const inputs = [
+            'date', 'name', 'location', 'city', 'region', 'subject',
+            'body', 'valediction', 'signatureName', 'position'
+        ];
+
+        const previewMap = {
+            'date': 'prev-date',
+            'name': 'prev-recipient',
+            'location': 'prev-address',
+            'city': 'prev-address',
+            'region': 'prev-address',
+            'subject': 'prev-subject',
+            'body': 'prev-body',
+            'valediction': 'prev-valediction',
+            'signatureName': 'prev-name',
+            'position': 'prev-position'
+        };
+
+        window.addEventListener('load', function () {
+            const canvas = document.getElementById('a4Canvas');
+            const ctx = canvas.getContext('2d');
+            const img = new Image();
+            img.src = 'Background Image.jpg'; // adjust path if needed
+            img.onload = function () {
+                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            };
+        });
+        function generatePreview() {
+            const addr = `${document.getElementById("location").value}, ${document.getElementById("city").value}, ${document.getElementById("region").value}`;
+            document.getElementById(previewMap['location']).textContent = addr;
+
+            inputs.forEach(id => {
+                const val = document.getElementById(id).value;
+                if (id === 'name') {
+                    document.getElementById(previewMap[id]).textContent = val ? `Dear ${val},` : '';
+                } else if (!['location', 'city', 'region'].includes(id)) {
+                    document.getElementById(previewMap[id]).textContent = val;
+                }
+            });
+        }
+
+        document.getElementById('signatureUpload').addEventListener('change', function (event) {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function (e) {
+                    document.getElementById('prev-signature').src = e.target.result;
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+    </script>
+</body>
+
+</html>
