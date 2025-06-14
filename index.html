@@ -87,9 +87,9 @@
             background: #fff;
 
             display: flex;
-    justify-content: center;
-    align-items: flex-start;
-    flex-direction: column;
+            justify-content: center;
+            align-items: flex-start;
+            flex-direction: column;
         }
 
         .signature-img {
@@ -99,6 +99,40 @@
 
         .letterPreview p {
             margin: 5px 0;
+        }
+
+        @media (max-width: 900px) {
+            .letter-container {
+                grid-template-columns: 1fr;
+                height: auto;
+            }
+
+            .letterPreview {
+                width: 100%;
+                border-left: none;
+                border-top: 1px solid #ccc;
+            }
+
+            .letterForm {
+                width: 90vw;
+                height: auto;
+            }
+
+
+        }
+
+        button {
+            font-family: 'Poppins', sans-serif;
+            background-color: #012d2e;
+            color: white;
+            padding: 5px 10px;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background-color: #016163;
         }
     </style>
 </head>
@@ -118,7 +152,7 @@
                     <input type="date" id="date" />
                 </div>
                 <div class="form-group three-quarter">
-                    <label for="location">House Location:</label>
+                    <label for="location">Address:</label>
                     <input type="text" id="location" />
                 </div>
 
@@ -170,79 +204,218 @@
             </form>
 
             <!-- Button to Trigger Preview -->
-            <div class="button">
+            <div class="button-container">
                 <div style="text-align:center; margin-top: 10px;">
-                    <button onclick="generatePreview()">View Letter</button>
+                    <button onclick="generatePreview()" class="buttonbutton">View Letter</button>
+                    <button onclick="generatePreview()">Generate Letter Preview</button>
+                    <button onclick="printCurrentPage()">Print Page</button>
                 </div>
             </div>
         </div>
 
         <!-- Right: Preview -->
         <div class="letterPreview" id="letterPreview">
-            <canvas id="a4Canvas" width="2480" height="3508"
-  style="width: 450px; height: auto; display: block; margin: 20px auto; border: 1px solid #ccc;">
-</canvas>
-
-
+            <div id="canvasContainer"></div>
+            <div id="pageNav" style="margin: 10px auto; text-align: center;"></div>
         </div>
+
     </div>
     </div> <!-- closing .letter-container -->
 
 
-
     <script>
-        const inputs = [
-            'date', 'name', 'location', 'city', 'region', 'subject',
-            'body', 'valediction', 'signatureName', 'position'
-        ];
+        let img, canvases = [], ctxs = [], activePage = 0;
+        const PAGE_WIDTH = 2480;
+        const PAGE_HEIGHT = 3508;
+        const MARGIN_LEFT = 200;
+        const MAX_BODY_BOX_HEIGHT = 1700;
+        const BODY_START_Y = 800;
+        let signatureImage = null;
+        document.getElementById('date').valueAsDate = new Date();
 
-        const previewMap = {
-            'date': 'prev-date',
-            'name': 'prev-recipient',
-            'location': 'prev-address',
-            'city': 'prev-address',
-            'region': 'prev-address',
-            'subject': 'prev-subject',
-            'body': 'prev-body',
-            'valediction': 'prev-valediction',
-            'signatureName': 'prev-name',
-            'position': 'prev-position'
-        };
-
-        window.addEventListener('load', function () {
-            const canvas = document.getElementById('a4Canvas');
-            const ctx = canvas.getContext('2d');
-            const img = new Image();
-            img.src = 'Background Image.jpg'; // adjust path if needed
-            img.onload = function () {
-                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-            };
-        });
-        function generatePreview() {
-            const addr = `${document.getElementById("location").value}, ${document.getElementById("city").value}, ${document.getElementById("region").value}`;
-            document.getElementById(previewMap['location']).textContent = addr;
-
-            inputs.forEach(id => {
-                const val = document.getElementById(id).value;
-                if (id === 'name') {
-                    document.getElementById(previewMap[id]).textContent = val ? `Dear ${val},` : '';
-                } else if (!['location', 'city', 'region'].includes(id)) {
-                    document.getElementById(previewMap[id]).textContent = val;
-                }
-            });
+        function printCurrentPage() {
+            const win = window.open();
+            const canvas = canvases[activePage];
+            const imgURL = canvas.toDataURL();
+            win.document.write(`<img src="${imgURL}" style="width:100%">`);
+            win.print();
+            win.close();
         }
 
-        document.getElementById('signatureUpload').addEventListener('change', function (event) {
-            const file = event.target.files[0];
+
+
+        document.getElementById('signatureUpload').addEventListener('change', function (e) {
+            const file = e.target.files[0];
             if (file) {
                 const reader = new FileReader();
-                reader.onload = function (e) {
-                    document.getElementById('prev-signature').src = e.target.result;
+                reader.onload = function (evt) {
+                    signatureImage = new Image();
+                    signatureImage.src = evt.target.result;
                 };
                 reader.readAsDataURL(file);
             }
         });
+
+
+        window.addEventListener('load', () => {
+            img = new Image();
+            img.src = 'Background Image.jpg';
+            img.onerror = () => {
+                alert("Background image not found.");
+            };
+
+            img.onload = () => generatePreview();
+        });
+
+        function generatePreview() {
+            const container = document.getElementById('canvasContainer');
+            container.innerHTML = '';
+            canvases = [];
+            ctxs = [];
+            activePage = 0;
+
+            const data = collectFormData();
+            const bodyLines = wrapText(data.body, 2100, '48px Times New Roman');
+            const linesPerPage = Math.floor(MAX_BODY_BOX_HEIGHT / 80); // ~80px line spacing
+            const bodyChunks = chunkText(bodyLines, linesPerPage);
+
+            // Build canvases
+            bodyChunks.forEach((chunk, index) => {
+                const canvas = document.createElement('canvas');
+                canvas.width = PAGE_WIDTH;
+                canvas.height = PAGE_HEIGHT;
+                canvas.style.width = '450px';
+                canvas.style.display = index === 0 ? 'block' : 'none';
+                canvas.style.margin = '20px auto';
+                canvas.style.border = '1px solid #ccc';
+                canvases.push(canvas);
+                ctxs.push(canvas.getContext('2d'));
+                container.appendChild(canvas);
+            });
+
+            // Draw each page
+            bodyChunks.forEach((chunk, i) => drawPage(ctxs[i], i, data, chunk));
+
+            // Draw navigation
+            drawPageNav();
+        }
+
+        function collectFormData() {
+            return {
+                date: document.getElementById('date').value,
+                name: document.getElementById('name').value,
+                location: document.getElementById('location').value,
+                city: document.getElementById('city').value,
+                region: document.getElementById('region').value,
+                subject: document.getElementById('subject').value,
+                body: document.getElementById('body').value,
+                valediction: document.getElementById('valediction').value,
+                signatureName: document.getElementById('signatureName').value,
+                position: document.getElementById('position').value
+            };
+        }
+        function drawPage(ctx, pageIndex, data, bodyLines) {
+            ctx.clearRect(0, 0, PAGE_WIDTH, PAGE_HEIGHT);
+            ctx.drawImage(img, 0, 0, PAGE_WIDTH, PAGE_HEIGHT);
+            ctx.fillStyle = '#000';
+            ctx.font = '60px Times New Roman';
+            ctx.textBaseline = 'top';
+
+            const lineGap = 80;
+            let y = 300;
+
+            if (pageIndex === 0) {
+                y = 700;
+
+                ctx.fillText(data.date, MARGIN_LEFT, y);
+                y += lineGap * 1.5;
+
+                ctx.fillText(`${data.name},`, MARGIN_LEFT, y);
+                y += lineGap;
+
+                ctx.fillText(`${data.location}, ${data.city}, ${data.region}`, MARGIN_LEFT, y);
+                y += lineGap * 1.5;
+
+                ctx.fillText(`Subject: ${data.subject}`, MARGIN_LEFT, y);
+                y += lineGap * 1.2;
+
+                ctx.fillText(`Dear ${data.name},`, MARGIN_LEFT, y);
+                y += lineGap * 1.5;
+            }
+
+            const bodyY = pageIndex === 0 ? y : 300;
+
+            // Draw body
+            bodyLines.forEach((line, i) => {
+                ctx.fillText(line, MARGIN_LEFT, bodyY + i * lineGap);
+            });
+
+            // Draw valediction, signature, position, and image only on last page
+            if (pageIndex === canvases.length - 1) {
+                const lastY = bodyY + bodyLines.length * lineGap + 80;
+
+                if (data.valediction) ctx.fillText(data.valediction, MARGIN_LEFT, lastY);
+                if (signatureImage && signatureImage.complete) {
+                    ctx.drawImage(signatureImage, MARGIN_LEFT, lastY + 60, 400, 100);
+                }
+                if (data.signatureName) ctx.fillText(data.signatureName, MARGIN_LEFT, lastY + 180);
+                if (data.position) ctx.fillText(data.position, MARGIN_LEFT, lastY + 260);
+            }
+        }
+
+        function drawPageNav() {
+            const nav = document.getElementById('pageNav');
+            nav.innerHTML = '';
+
+            canvases.forEach((_, i) => {
+                const btn = document.createElement('button');
+                btn.textContent = i + 1;
+                btn.style.margin = '0 5px';
+                btn.onclick = () => switchToPage(i);
+                nav.appendChild(btn);
+            });
+        }
+
+        function switchToPage(index) {
+            canvases.forEach((canvas, i) => {
+                canvas.style.display = i === index ? 'block' : 'none';
+            });
+            activePage = index;
+        }
+
+        function wrapText(text, maxWidth, font) {
+            const tempCanvas = document.createElement('canvas');
+            const ctx = tempCanvas.getContext('2d');
+            ctx.font = font;
+
+            const words = text.split(/\s+/);
+            let line = '', lines = [];
+
+            for (let i = 0; i < words.length; i++) {
+                const testLine = line + words[i] + ' ';
+                const metrics = ctx.measureText(testLine);
+                if (metrics.width > maxWidth && line) {
+                    lines.push(line.trim());
+                    line = words[i] + ' ';
+                } else {
+                    line = testLine;
+                }
+            }
+            if (line) lines.push(line.trim());
+            return lines;
+        }
+
+        function chunkText(lines, chunkSize) {
+            let result = [];
+            for (let i = 0; i < lines.length; i += chunkSize) {
+                result.push(lines.slice(i, i + chunkSize));
+            }
+            return result;
+        }
     </script>
+
+
+
 </body>
 
 </html>
